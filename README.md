@@ -1,36 +1,41 @@
 # FOMC经济数据分析项目
 
 ## 项目概述
-本项目旨在收集、存储和分析与美联储公开市场委员会(FOMC)决策相关的经济数据。项目包含数据收集、存储和可视化组件，支持从FRED API批量获取51个关键经济指标。
+本项目收集、存储和分析与FOMC决策相关的经济数据，并提供Web可视化与自动化研报生成功能（DeepSeek LLM）。
 
-## 项目结构
+## 项目结构（核心文件）
 ```
-FOMC/
-├── config/                 # 配置文件
-├── data/                   # 数据处理相关模块
-│   ├── collect_economic_data_from_excel.py  # 读取Excel指标层级并一次性写库
-│   ├── data_updater.py     # 增量数据更新和任务编排入口
-│   ├── category_manager.py # 指标分类与排序维护
-│   ├── fred_api.py         # 简洁FRED API封装，供单次批量脚本调用
-│   ├── preprocessing.py    # 数据清洗、单位标准化等预处理工具
-│   ├── rate_limited_fred_api.py  # 带限速与批处理辅助的FRED API客户端
-│   └── visualization.py    # 本地探索式可视化
-├── database/               # 数据库相关模块
-│   ├── base.py            # 共享Base对象
-│   ├── connection.py      # 数据库连接
-│   └── models.py          # 数据模型
-├── docs/                   # 文档和数据文件
-│   ├── US Economic Indicators with FRED Codes.xlsx  # 经济指标与FRED代码对照表
-│   └── cpi_weights.csv    # CPI权重数据
-├── webapp/                 # Web应用程序
-│   ├── app.py             # Flask应用程序
-│   ├── fomc_data.db       # 数据库文件
-│   └── templates/         # HTML模板
-├── .env                   # 环境变量配置
-├── fomc_data.db           # SQLite数据库文件
-├── init_database.py       # 数据库初始化脚本
-├── process_all_indicators.py  # 批量处理所有经济指标
-└── requirements.txt       # Python依赖包
+├─ config/                         # 全局配置占位（保持包结构）
+├─ data/                           # 数据摄取与预处理
+│   ├─ charts/                     # 生成静态图的数据管道
+│   │   ├─ nonfarm_jobs_chart.py   # PAYEMS + UNRATE 组合图（图1数据来源）
+│   │   └─ unemployment_rate_comparison.py  # U1~U6 对比（图2数据来源）
+│   ├─ collect_economic_data_from_excel.py  # 读取 Excel 指标层级并写库
+│   ├─ data_updater.py             # 增量更新调度
+│   ├─ category_manager.py         # 指标分类/排序维护
+│   ├─ fred_api.py                 # 轻量 FRED 客户端
+│   ├─ rate_limited_fred_api.py    # 带限速/批量的 FRED 客户端
+│   ├─ preprocessing.py            # 清洗、单位标准化
+│   └─ visualization.py            # 本地探索式可视化
+├─ database/                       # ORM 定义
+│   ├─ base.py
+│   ├─ connection.py
+│   └─ models.py
+├─ docs/                           # 参考资料
+│   ├─ US Economic Indicators with FRED Codes.xlsx
+│   └─ cpi_weights.csv
+├─ reports/                        # 研报生成
+│   ├─ report_generator.py         # 构造Prompt + 调用DeepSeek
+│   └─ deepseek_client.py          # DeepSeek API封装
+├─ webapp/                         # Flask 前端
+│   ├─ app.py                      # API + 前端路由
+│   ├─ templates/index.html        # 单页应用（Chart.js、研报渲染）
+│   └─ fomc_data.db                # 运行时数据库（与根目录同名文件一致）
+├─ fomc_data.db                    # SQLite 数据库（根目录副本）
+├─ init_database.py                # 初始化库
+├─ process_all_indicators.py       # 一键全量/增量处理入口
+├─ update_fred_urls.py             # FRED链接修正工具
+└─ requirements.txt                # 依赖
 ```
 
 ## 核心Python模块功能一览

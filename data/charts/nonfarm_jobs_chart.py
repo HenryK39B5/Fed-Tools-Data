@@ -82,17 +82,20 @@ class LaborMarketChartBuilder:
     def build(
         self, save_path: Optional[str] = None, as_of: Optional[datetime] = None
     ) -> Tuple[plt.Figure, ChartPayload]:
-        """
-        Public entry point to build the chart.
-        """
+        """Public entry point: prepare data, then plot."""
 
-        payload = self._prepare_datasets(as_of=as_of)
+        payload = self.prepare_payload(as_of=as_of)
         fig = self._plot(payload)
 
         if save_path:
             fig.savefig(save_path, dpi=300, bbox_inches="tight")
 
         return fig, payload
+
+    def prepare_payload(self, as_of: Optional[datetime] = None) -> ChartPayload:
+        """Prepare datasets without plotting (for API usage)."""
+
+        return self._prepare_datasets(as_of=as_of)
 
     def _prepare_datasets(self, as_of: Optional[datetime] = None) -> ChartPayload:
         """
@@ -149,7 +152,7 @@ class LaborMarketChartBuilder:
         )
         ax_right.set_ylabel("失业率(%)")
 
-        ax_left.set_title("新增非农就业（万人）及失业率(%，右)")
+        ax_left.set_title("图1：新增非农就业（万人）及失业率(%，右)", loc="left", pad=14)
         ax_left.set_xlabel("日期")
         ax_left.set_xlim(payload.start_date, payload.end_date)
 
@@ -159,7 +162,14 @@ class LaborMarketChartBuilder:
         # Build a combined legend.
         handles_left, labels_left = ax_left.get_legend_handles_labels()
         handles_right, labels_right = ax_right.get_legend_handles_labels()
-        ax_left.legend(handles_left + handles_right, labels_left + labels_right, loc="upper left")
+        ax_left.legend(
+            handles_left + handles_right,
+            labels_left + labels_right,
+            loc="upper left",
+            bbox_to_anchor=(0, 1.02),
+            ncol=2,
+            frameon=False,
+        )
 
         fig.tight_layout()
         return fig

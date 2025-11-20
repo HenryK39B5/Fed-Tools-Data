@@ -26,6 +26,7 @@ from database.models import EconomicIndicator, EconomicDataPoint, IndicatorCateg
 from sqlalchemy import func
 
 from data.charts.nonfarm_jobs_chart import LaborMarketChartBuilder
+from data.charts.unemployment_rate_comparison import UnemploymentRateComparisonBuilder
 from reports.report_generator import EconomicReportGenerator, IndicatorSummary, ReportFocus
 
 # 创建引擎和会话
@@ -39,6 +40,13 @@ def get_labor_chart_builder():
     if not hasattr(app, "_labor_chart_builder"):
         app._labor_chart_builder = LaborMarketChartBuilder(database_url=DATABASE_URL)
     return app._labor_chart_builder
+
+
+def get_unemployment_chart_builder():
+    """Singleton accessor for U-1~U-6 chart builder."""
+    if not hasattr(app, "_unemployment_chart_builder"):
+        app._unemployment_chart_builder = UnemploymentRateComparisonBuilder(database_url=DATABASE_URL)
+    return app._unemployment_chart_builder
 
 def build_economic_report():
     """Lazy init the EconomicReportGenerator, only when API key is configured."""
@@ -268,10 +276,24 @@ def generate_labor_market_report():
 
     try:
         chart_builder = get_labor_chart_builder()
-        fig, chart_payload = chart_builder.build(as_of=parsed_month)
-        chart_image = figure_to_base64(fig)
+        chart_payload = chart_builder.prepare_payload(as_of=parsed_month)
     except Exception as exc:
         return jsonify({'error': f'生成图表失败: {exc}'}), 500
+
+    rate_series_summary = []
+    try:
+        rate_builder = get_unemployment_chart_builder()
+        rate_payload = rate_builder.prepare_payload(as_of=parsed_month)
+        for snap in rate_payload.snapshots:
+            rate_series_summary.append({
+                'label': snap.label,
+                'code': snap.fred_code,
+                'current': snap.current,
+                'previous': snap.previous,
+                'mom_delta': snap.mom_delta
+            })
+    except Exception as exc:
+        rate_series_summary = []
 
     payems_row = select_month_row(chart_payload.payems_changes, target_period)
     unemployment_row = select_month_row(chart_payload.unemployment_rate, target_period)
@@ -280,6 +302,50 @@ def generate_labor_market_report():
 
     prev_period = target_period - 1
     yoy_period = target_period - 12
+
+    # 就业率/劳动参与率（近2年窗口）
+    employment_participation_series: list[dict] = []
+    employment_value = None
+    participation_value = None
+    employment_mom = None
+    participation_mom = None
+
+    start_window = parsed_month - pd.DateOffset(years=2)
+    employment_df = chart_builder._load_indicator_series("EMRATIO")
+    participation_df = chart_builder._load_indicator_series("CIVPART")
+    employment_df = employment_df[(employment_df["date"] >= start_window) & (employment_df["date"] <= parsed_month)].copy()
+    participation_df = participation_df[(participation_df["date"] >= start_window) & (participation_df["date"] <= parsed_month)].copy()
+
+    merged = pd.merge(
+        employment_df.rename(columns={"value": "employment_rate"}),
+        participation_df.rename(columns={"value": "participation_rate"}),
+        on="date",
+        how="outer",
+    ).sort_values("date")
+
+    for _, row in merged.iterrows():
+        employment_participation_series.append({
+            "date": row["date"].strftime("%Y-%m-%d"),
+            "employment_rate": float(row["employment_rate"]) if pd.notna(row.get("employment_rate")) else None,
+            "participation_rate": float(row["participation_rate"]) if pd.notna(row.get("participation_rate")) else None,
+        })
+
+    emp_row = select_month_row(employment_df, target_period)
+    part_row = select_month_row(participation_df, target_period)
+    prev_emp_row = select_month_row(employment_df, prev_period)
+    prev_part_row = select_month_row(participation_df, prev_period)
+    employment_value = float(emp_row["value"]) if emp_row is not None else None
+    participation_value = float(part_row["value"]) if part_row is not None else None
+    employment_mom = format_delta(
+        employment_value,
+        float(prev_emp_row["value"]) if prev_emp_row is not None else None,
+        decimals=2
+    )
+    participation_mom = format_delta(
+        participation_value,
+        float(prev_part_row["value"]) if prev_part_row is not None else None,
+        decimals=2
+    )
     prev_payems_row = select_month_row(chart_payload.payems_changes, prev_period)
     prev_unemp_row = select_month_row(chart_payload.unemployment_rate, prev_period)
     yoy_unemp_row = select_month_row(chart_payload.unemployment_rate, yoy_period)
@@ -344,6 +410,51 @@ def generate_labor_market_report():
             'context': 'UNRATE，经季调'
         })
 
+    # 传入各类型失业率细分数据，提升LLM覆盖度
+    for rate in rate_series_summary:
+        if rate.get('current') is None:
+            continue
+        mom_delta = rate.get('mom_delta')
+        indicator_summaries.append(IndicatorSummary(
+            name=f"{rate.get('label')}失业率",
+            latest_value=f"{rate['current']:.2f}",
+            units="%",
+            mom_change=f"{mom_delta:+.2f} ppts" if mom_delta is not None else None,
+            context=f"代码 {rate.get('code')}"
+        ))
+
+    # 传入就业率与劳动参与率
+    if employment_value is not None:
+        indicator_summaries.append(IndicatorSummary(
+            name="就业率",
+            latest_value=f"{employment_value:.2f}",
+            units="%",
+            mom_change=f"{employment_mom} ppts" if employment_mom else None,
+            context="EMRATIO，就业人口占工作年龄人口"
+        ))
+        ui_indicators.append({
+            'name': '就业率',
+            'latest_value': f"{employment_value:.2f}",
+            'units': '%',
+            'mom_change': employment_mom,
+            'context': 'EMRATIO，就业人口占工作年龄人口'
+        })
+    if participation_value is not None:
+        indicator_summaries.append(IndicatorSummary(
+            name="劳动参与率",
+            latest_value=f"{participation_value:.2f}",
+            units="%",
+            mom_change=f"{participation_mom} ppts" if participation_mom else None,
+            context="CIVPART，劳动力占工作年龄人口"
+        ))
+        ui_indicators.append({
+            'name': '劳动参与率',
+            'latest_value': f"{participation_value:.2f}",
+            'units': '%',
+            'mom_change': participation_mom,
+            'context': 'CIVPART，劳动力占工作年龄人口'
+        })
+
     avg_payems = chart_payload.payems_changes["monthly_change_10k"].mean()
     avg_unemp = chart_payload.unemployment_rate["value"].mean()
     chart_commentary = (
@@ -352,6 +463,14 @@ def generate_labor_market_report():
         f"当前为{payems_value:.1f}万人；失业率平均{avg_unemp:.1f}%，"
         f"当前为{unemp_value:.1f}%."
     ) if payems_value is not None and unemp_value is not None else ""
+
+    if employment_value is not None and participation_value is not None:
+        emp_avg = employment_df["value"].mean()
+        part_avg = participation_df["value"].mean()
+        chart_commentary += (
+            f" 就业率均值约{emp_avg:.2f}%，当前{employment_value:.2f}%；"
+            f"劳动参与率均值约{part_avg:.2f}%，当前{participation_value:.2f}%。"
+        )
 
     fomc_points = []
     if payems_value is not None and avg_payems is not None:
@@ -398,7 +517,6 @@ def generate_labor_market_report():
     response = {
         'report_month': report_month,
         'headline_summary': headline_summary,
-        'chart_image': chart_image,
         'chart_window': {
             'start_date': chart_payload.start_date.strftime("%Y-%m-%d"),
             'end_date': chart_payload.end_date.strftime("%Y-%m-%d")
@@ -407,6 +525,8 @@ def generate_labor_market_report():
         'chart_commentary': chart_commentary,
         'payems_series': serialize_series(chart_payload.payems_changes, "monthly_change_10k"),
         'unemployment_series': serialize_series(chart_payload.unemployment_rate, "value"),
+        'unemployment_types_series': rate_series_summary,
+        'employment_participation_series': employment_participation_series,
         'report_text': report_text,
         'llm_error': llm_error
     }

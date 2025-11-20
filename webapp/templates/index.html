@@ -189,8 +189,126 @@
             color: #6c757d;
         }
 
-        #reportText {
-            white-space: pre-line;
+        .report-article {
+            background: linear-gradient(145deg, #ffffff 0%, #f6f9fc 100%);
+            border: 1px solid #e6ecf3;
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            box-shadow: 0 0.75rem 1.25rem rgba(0,0,0,0.05);
+        }
+
+        .report-hero {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .report-type-badge {
+            background: #0d6efd;
+            color: #fff;
+            padding: 0.35rem 0.75rem;
+            border-radius: 999px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            box-shadow: 0 0.5rem 1rem rgba(13, 110, 253, 0.2);
+        }
+
+        .headline-chip {
+            background: #e9f3ff;
+            color: #1b4f72;
+            padding: 0.35rem 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid #d0e4ff;
+        }
+
+        .report-body p {
+            margin-bottom: 0.75rem;
+            line-height: 1.6;
+            color: #1f2d3d;
+        }
+
+        .report-body h1, .report-body h2, .report-body h3 {
+            color: #1a365d;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+
+        .report-body h1 { font-size: 1.4rem; border-left: 4px solid #0d6efd; padding-left: 0.5rem; }
+        .report-body h2 { font-size: 1.25rem; border-left: 3px solid #2b6cb0; padding-left: 0.45rem; }
+        .report-body h3 { font-size: 1.1rem;  border-left: 3px solid #3182ce; padding-left: 0.4rem; }
+
+        .report-body ul { padding-left: 1.1rem; }
+        .report-body li { margin-bottom: 0.3rem; }
+
+        .report-figure {
+            background: #ffffff;
+            border: 1px solid #e1e8f0;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            box-shadow: 0 0.75rem 1.25rem rgba(0,0,0,0.04);
+            margin: 1rem 0;
+            min-height: 340px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .report-figure img {
+            width: 100%;
+            border-radius: 0.4rem;
+        }
+
+        .report-figure figcaption {
+            margin-top: 0.4rem;
+            font-size: 0.9rem;
+            color: #4f5b66;
+        }
+
+        .report-figure canvas {
+            display: block;
+            width: 100% !important;
+            max-height: 360px;
+        }
+
+        .figure-title {
+            font-weight: 700;
+            color: #1a365d;
+            margin-bottom: 0.4rem;
+        }
+
+        .metric-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.6rem;
+            border-radius: 0.6rem;
+            background: #0d6efd;
+            color: #fff;
+            font-weight: 600;
+            box-shadow: 0 0.5rem 1rem rgba(13, 110, 253, 0.2);
+            margin-right: 0.35rem;
+            margin-bottom: 0.35rem;
+        }
+
+        .metric-chip .delta {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+
+        .metric-pill {
+            border-radius: 0.6rem;
+            padding: 0.6rem 0.75rem;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-pill strong {
+            display: block;
+            color: #1e293b;
         }
         
         /* 响应式设计增强 */
@@ -422,6 +540,7 @@
                                 <label for="reportType" class="form-label">报告类型</label>
                                 <select class="form-select" id="reportType" disabled>
                                     <option value="nonfarm" selected>非农就业 + 失业率</option>
+                                    <option value="cpi" disabled>美国CPI（即将上线）</option>
                                 </select>
                             </div>
                             <div class="col-sm-6 col-lg-4">
@@ -432,29 +551,36 @@
                                 <div id="reportStatus" class="report-meta">请选择月份后点击生成。</div>
                             </div>
                         </div>
-                        <div class="row mt-4">
-                            <div class="col-lg-6 mb-3 mb-lg-0">
-                                <div class="report-chart-placeholder" id="reportChartPlaceholder">
-                                    <img id="reportChartImage" class="img-fluid d-none" alt="劳动力市场图表">
-                                    <div id="reportChartEmpty">图表尚未生成</div>
+                        <div class="mt-4 report-article" id="reportArticle">
+                            <div class="report-hero">
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <span class="report-type-badge">非农就业研报</span>
+                                    <span class="headline-chip" id="reportHeadlineBadge">待生成</span>
                                 </div>
+                                <div class="metric-chip" id="reportWindow">近期区间</div>
                             </div>
-                            <div class="col-lg-6">
-                                <div class="report-text-box" id="reportTextBox">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <h6 class="mb-0">研报内容</h6>
-                                        <span class="badge bg-secondary" id="reportHeadlineBadge">待生成</span>
-                                    </div>
-                                    <div id="reportText" class="text-muted">生成研报后将在此展示全文。</div>
-                                    <div id="llmError" class="text-danger small mt-2 d-none"></div>
-                                </div>
+                            <div class="report-body" id="reportText">
+                                <p class="text-muted">生成研报后，将呈现类似券商报告的图文混排体验。</p>
                             </div>
+                            <figure class="report-figure mt-3">
+                                <div class="figure-title">图1：新增非农就业（万人）及失业率(%，右)</div>
+                                <canvas id="reportChart1" height="320"></canvas>
+                            </figure>
+                            <figure class="report-figure">
+                                <div class="figure-title">图2：美国各类型失业率(%)</div>
+                                <canvas id="reportChart2" height="320"></canvas>
+                            </figure>
+                            <figure class="report-figure">
+                                <div class="figure-title">图3：美国就业率与劳动参与率(%)</div>
+                                <canvas id="reportChart3" height="320"></canvas>
+                            </figure>
+                            <div id="llmError" class="text-danger small mt-2 d-none"></div>
                         </div>
                         <div class="mt-4">
                             <h6>关键指标摘要</h6>
-                            <ul class="list-group list-group-flush" id="indicatorSummary">
-                                <li class="list-group-item text-muted">暂无数据，请先生成一次研报。</li>
-                            </ul>
+                            <div id="indicatorSummary" class="row g-2">
+                                <div class="col-12 text-muted">暂无数据，请先生成一次研报。</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -992,86 +1118,406 @@
 
         function updateReportUI(data) {
             const windowInfo = data.chart_window;
-            const windowText = windowInfo ? `图表区间: ${windowInfo.start_date} - ${windowInfo.end_date}` : '生成完成';
+            const windowText = windowInfo ? `图表区间：${windowInfo.start_date} - ${windowInfo.end_date}` : '生成完成';
             setReportLoading(false, windowText);
-            updateReportChart(data.chart_image);
-            updateIndicatorSummary(data.indicators);
-            updateReportText(data.report_text, data.llm_error, data.headline_summary);
+            updateReportHero(data.headline_summary, windowText);
+            renderReportContent(
+                data.report_text,
+                {
+                    labor: data.chart_image,
+                    unemploymentTypes: data.unemployment_types_chart
+                },
+                data
+            );
+            updateIndicatorSummary(data.indicators, data.unemployment_types_series);
+            handleLLMError(data.llm_error);
         }
 
-        function updateReportChart(imageBase64) {
-            const img = document.getElementById('reportChartImage');
-            const placeholder = document.getElementById('reportChartEmpty');
-            if (imageBase64 && img) {
-                img.src = `data:image/png;base64,${imageBase64}`;
-                img.classList.remove('d-none');
-                if (placeholder) {
-                    placeholder.classList.add('d-none');
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
+        function formatInline(text) {
+            // Very small inline formatter: bold (**text**) and italic (*text*)
+            const escaped = escapeHtml(text);
+            return escaped
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>');
+        }
+
+        function renderMarkdown(mdText) {
+            // Basic Markdown rendering for headings + lists + paragraphs.
+            const lines = (mdText || '').split(/\r?\n/);
+            const html = [];
+            let listBuffer = [];
+            let listType = null; // 'ul' or 'ol'
+
+            function flushList() {
+                if (listBuffer.length === 0) return;
+                const tag = listType === 'ol' ? 'ol' : 'ul';
+                html.push(`<${tag}>${listBuffer.map(item => `<li>${item}</li>`).join('')}</${tag}>`);
+                listBuffer = [];
+                listType = null;
+            }
+
+            lines.forEach(rawLine => {
+                const line = rawLine.trim();
+                if (!line) {
+                    flushList();
+                    return;
                 }
-            } else {
-                if (img) {
-                    img.classList.add('d-none');
+
+                const headingMatch = line.match(/^(#{1,6})\s+(.*)/);
+                if (headingMatch) {
+                    flushList();
+                    const level = Math.min(headingMatch[1].length, 3); // clamp to h3 for UI
+                    html.push(`<h${level}>${formatInline(headingMatch[2])}</h${level}>`);
+                    return;
                 }
-                if (placeholder) {
-                    placeholder.classList.remove('d-none');
-                    placeholder.textContent = '无法生成图表';
+
+                const bulletMatch = line.match(/^[-*+]\s+(.*)/);
+                if (bulletMatch) {
+                    if (listType && listType !== 'ul') flushList();
+                    listType = 'ul';
+                    listBuffer.push(formatInline(bulletMatch[1]));
+                    return;
                 }
+
+                const orderedMatch = line.match(/^\d+\.\s+(.*)/);
+                if (orderedMatch) {
+                    if (listType && listType !== 'ol') flushList();
+                    listType = 'ol';
+                    listBuffer.push(formatInline(orderedMatch[1]));
+                    return;
+                }
+
+                flushList();
+                html.push(`<p>${formatInline(line)}</p>`);
+            });
+
+            flushList();
+            return html.join('\n');
+        }
+
+        function stripCodeFence(mdText) {
+            if (!mdText) return '';
+            const fenceRegex = /^```[a-zA-Z0-9]*\s*([\s\S]*?)\s*```$/;
+            const match = mdText.trim().match(fenceRegex);
+            return match ? match[1].trim() : mdText;
+        }
+
+        function updateReportHero(headline, windowText) {
+            const badgeEl = document.getElementById('reportHeadlineBadge');
+            const windowChip = document.getElementById('reportWindow');
+            if (badgeEl && headline) {
+                badgeEl.textContent = headline;
+            }
+            if (windowChip && windowText) {
+                windowChip.textContent = windowText;
             }
         }
 
-        function updateIndicatorSummary(indicators) {
-            const list = document.getElementById('indicatorSummary');
-            if (!list) return;
-            if (!indicators || indicators.length === 0) {
-                list.innerHTML = '<li class="list-group-item text-muted">暂无数据</li>';
+        let reportChart1 = null;
+        let reportChart2 = null;
+        let reportChart3 = null;
+
+        function destroyReportCharts() {
+            if (reportChart1) {
+                reportChart1.destroy();
+                reportChart1 = null;
+            }
+            if (reportChart2) {
+                reportChart2.destroy();
+                reportChart2 = null;
+            }
+            if (reportChart3) {
+                reportChart3.destroy();
+                reportChart3 = null;
+            }
+        }
+
+        function resetReportCanvas(canvasId) {
+            const existing = document.getElementById(canvasId);
+            if (!existing) return null;
+            const clone = existing.cloneNode(false);
+            clone.height = existing.height || 320;
+            existing.parentNode.replaceChild(clone, existing);
+            return clone;
+        }
+
+        function renderReportContent(reportText, charts, rawData) {
+            const container = document.getElementById('reportText');
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (!reportText) {
+                const p = document.createElement('p');
+                p.className = 'text-muted';
+                p.textContent = '未能生成研报内容，请检查DeepSeek配置。';
+                container.appendChild(p);
                 return;
             }
-            list.innerHTML = '';
-            indicators.forEach(item => {
-                const li = document.createElement('li');
-                li.className = 'list-group-item';
-                const deltas = [];
-                if (item.mom_change) {
-                    deltas.push(`环比: ${item.mom_change}`);
+
+            const cleanedText = stripCodeFence(reportText);
+            const contentWrapper = document.createElement('div');
+            contentWrapper.innerHTML = renderMarkdown(cleanedText);
+
+            // Pull existing figures so we can place them next to relevant sections.
+            const fig1 = document.getElementById('reportChart1')?.closest('figure') || null;
+            const fig2 = document.getElementById('reportChart2')?.closest('figure') || null;
+            const fig3 = document.getElementById('reportChart3')?.closest('figure') || null;
+            const hasFig1 = !!(fig1 && fig1.parentNode);
+            const hasFig2 = !!(fig2 && fig2.parentNode);
+            const hasFig3 = !!(fig3 && fig3.parentNode);
+            if (hasFig1) fig1.parentNode.removeChild(fig1);
+            if (hasFig2) fig2.parentNode.removeChild(fig2);
+            if (hasFig3) fig3.parentNode.removeChild(fig3);
+
+            let placed1 = false;
+            let placed2 = false;
+            let placed3 = false;
+
+            Array.from(contentWrapper.childNodes).forEach(node => {
+                container.appendChild(node);
+                if (!placed1 && fig1 && node.nodeType === 1 && /图1/.test(node.textContent || '')) {
+                    container.appendChild(fig1);
+                    placed1 = true;
                 }
-                if (item.yoy_change) {
-                    deltas.push(`同比: ${item.yoy_change}`);
+                if (!placed2 && fig2 && node.nodeType === 1 && /图2/.test(node.textContent || '')) {
+                    container.appendChild(fig2);
+                    placed2 = true;
                 }
-                const deltaText = deltas.length ? `（${deltas.join('，')}）` : '';
-                const contextText = item.context ? `<div class="small text-muted">${item.context}</div>` : '';
-                li.innerHTML = `<strong>${item.name}</strong>: ${item.latest_value}${item.units}${deltaText}${contextText}`;
-                list.appendChild(li);
+                if (!placed3 && fig3 && node.nodeType === 1 && /图3/.test(node.textContent || '')) {
+                    container.appendChild(fig3);
+                    placed3 = true;
+                }
+            });
+
+            if (fig1 && !placed1) container.appendChild(fig1);
+            if (fig2 && !placed2) container.appendChild(fig2);
+            if (fig3 && !placed3) container.appendChild(fig3);
+
+            renderReportCharts(rawData);
+        }
+
+        function renderReportCharts(data) {
+            if (!data) return;
+            destroyReportCharts();
+            const canvas1 = resetReportCanvas('reportChart1');
+            const canvas2 = resetReportCanvas('reportChart2');
+            const canvas3 = resetReportCanvas('reportChart3');
+
+            if (canvas1) {
+                const labels = (data.payems_series || []).map(p => p.date);
+                const payemsValues = (data.payems_series || []).map(p => p.monthly_change_10k ?? p.value ?? null);
+                const unrateMap = new Map((data.unemployment_series || []).map(u => [u.date, u.value]));
+                const unrateValues = labels.map(d => unrateMap.get(d) ?? null);
+
+                reportChart1 = new Chart(canvas1.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [
+                            {
+                                type: 'bar',
+                                label: '新增非农就业（万人）',
+                                data: payemsValues,
+                                backgroundColor: 'rgba(47, 120, 196, 0.6)',
+                                yAxisID: 'y',
+                            },
+                            {
+                                type: 'line',
+                                label: '失业率(%)',
+                                data: unrateValues,
+                                borderColor: '#ff7f0e',
+                                backgroundColor: 'rgba(255, 127, 14, 0.2)',
+                                yAxisID: 'y1',
+                                tension: 0.15,
+                                pointRadius: 2,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { 
+                            legend: { position: 'top', align: 'start' }
+                        },
+                        scales: {
+                            y: { position: 'left', title: { display: true, text: '万人' } },
+                            y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '%'} }
+                        },
+                    },
+                });
+            }
+
+            if (canvas2) {
+                const labels = (data.unemployment_types_series || []).map(i => i.label);
+                const prevValues = (data.unemployment_types_series || []).map(i => i.previous ?? null);
+                const currValues = (data.unemployment_types_series || []).map(i => i.current ?? null);
+                reportChart2 = new Chart(canvas2.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: '上月', data: prevValues, backgroundColor: 'rgba(141, 169, 196, 0.7)' },
+                            { label: '本月', data: currValues, backgroundColor: 'rgba(47, 120, 196, 0.8)' },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'top', align: 'start' } },
+                        scales: { y: { beginAtZero: true, title: { display: true, text: '失业率(%)' } } },
+                    },
+                });
+            }
+
+            if (canvas3) {
+                const labels = (data.employment_participation_series || []).map(p => p.date);
+                const employmentValues = (data.employment_participation_series || []).map(p => p.employment_rate != null ? Number(p.employment_rate) : null);
+                const participationValues = (data.employment_participation_series || []).map(p => p.participation_rate != null ? Number(p.participation_rate) : null);
+                const hasSeries = employmentValues.some(v => v !== null) || participationValues.some(v => v !== null);
+                if (!hasSeries) {
+                    const parent = canvas3.parentNode;
+                    if (parent && !parent.querySelector('.figure-empty')) {
+                        const holder = document.createElement('div');
+                        holder.className = 'text-muted small figure-empty';
+                        holder.textContent = '缺少就业率/劳动参与率数据';
+                        parent.appendChild(holder);
+                    }
+                    return;
+                } else {
+                    const empty = canvas3.parentNode?.querySelector('.figure-empty');
+                    if (empty) empty.remove();
+                }
+                reportChart3 = new Chart(canvas3.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [
+                            {
+                                label: '就业率(%)',
+                                data: employmentValues,
+                                borderColor: '#2f78c4',
+                                backgroundColor: 'rgba(47, 120, 196, 0.15)',
+                                tension: 0.15,
+                                pointRadius: 2,
+                                yAxisID: 'y',
+                            },
+                            {
+                                label: '劳动参与率(%)',
+                                data: participationValues,
+                                borderColor: '#ef6c00',
+                                backgroundColor: 'rgba(239, 108, 0, 0.15)',
+                                tension: 0.15,
+                                pointRadius: 2,
+                                yAxisID: 'y1',
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'top', align: 'start' } },
+                        scales: { 
+                            y: { position: 'left', title: { display: true, text: '就业率(%)' } },
+                            y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '劳动参与率(%)' } }
+                        },
+                    },
+                });
+            }
+        }
+
+        function appendFigure(container, base64Image, caption) {
+            if (!base64Image) return;
+            const figure = document.createElement('figure');
+            figure.className = 'report-figure';
+            const img = document.createElement('img');
+            img.src = `data:image/png;base64,${base64Image}`;
+            img.alt = caption;
+            const figcap = document.createElement('figcaption');
+            figcap.textContent = caption;
+            figure.appendChild(img);
+            figure.appendChild(figcap);
+            container.appendChild(figure);
+        }
+
+        function updateIndicatorSummary(indicators, unemploymentSeries) {
+            const wrapper = document.getElementById('indicatorSummary');
+            if (!wrapper) return;
+            wrapper.innerHTML = '';
+
+            const metricItems = [];
+            if (indicators && Array.isArray(indicators)) {
+                indicators.forEach(item => {
+                    const deltas = [];
+                    if (item.mom_change) deltas.push(`环比 ${item.mom_change}`);
+                    if (item.yoy_change) deltas.push(`同比 ${item.yoy_change}`);
+                    metricItems.push({
+                        title: item.name,
+                        value: `${item.latest_value}${item.units}`,
+                        detail: deltas.join(' · '),
+                        context: item.context || ''
+                    });
+                });
+            }
+
+            if (unemploymentSeries && Array.isArray(unemploymentSeries)) {
+                unemploymentSeries.forEach(item => {
+                    const delta = item.mom_delta !== null && item.mom_delta !== undefined ? `${item.mom_delta >= 0 ? '+' : ''}${item.mom_delta.toFixed(2)}` : null;
+                    metricItems.push({
+                        title: `${item.label} 失业率`,
+                        value: item.current !== null && item.current !== undefined ? `${item.current.toFixed(2)}%` : '—',
+                        detail: delta ? `环比 ${delta}` : '',
+                        context: `代码 ${item.code}`
+                    });
+                });
+            }
+
+            if (metricItems.length === 0) {
+                const placeholder = document.createElement('div');
+                placeholder.className = 'col-12 text-muted';
+                placeholder.textContent = '暂无数据，请先生成一次研报。';
+                wrapper.appendChild(placeholder);
+                return;
+            }
+
+            metricItems.forEach(item => {
+                const col = document.createElement('div');
+                col.className = 'col-sm-6 col-lg-4';
+                const pill = document.createElement('div');
+                pill.className = 'metric-pill';
+                pill.innerHTML = `<strong>${item.title}</strong><div>${item.value}</div>`;
+                if (item.detail) {
+                    const detailEl = document.createElement('div');
+                    detailEl.className = 'text-muted small';
+                    detailEl.textContent = item.detail;
+                    pill.appendChild(detailEl);
+                }
+                if (item.context) {
+                    const contextEl = document.createElement('div');
+                    contextEl.className = 'text-muted small';
+                    contextEl.textContent = item.context;
+                    pill.appendChild(contextEl);
+                }
+                col.appendChild(pill);
+                wrapper.appendChild(col);
             });
         }
 
-        function updateReportText(reportText, llmError, headline) {
-            const reportEl = document.getElementById('reportText');
+        function handleLLMError(llmError) {
             const errorEl = document.getElementById('llmError');
-            const badgeEl = document.getElementById('reportHeadlineBadge');
-
-            if (badgeEl && headline) {
-                badgeEl.textContent = headline;
-                badgeEl.classList.remove('bg-secondary');
-                badgeEl.classList.add('bg-primary');
-            }
-
-            if (reportEl) {
-                if (reportText) {
-                    reportEl.textContent = reportText;
-                    reportEl.classList.remove('text-muted');
-                } else {
-                    reportEl.textContent = '未能生成研报内容，请检查DeepSeek配置。';
-                    reportEl.classList.add('text-muted');
-                }
-            }
-
-            if (errorEl) {
-                if (llmError) {
-                    errorEl.textContent = llmError;
-                    errorEl.classList.remove('d-none');
-                } else {
-                    errorEl.classList.add('d-none');
-                }
+            if (!errorEl) return;
+            if (llmError) {
+                errorEl.textContent = llmError;
+                errorEl.classList.remove('d-none');
+            } else {
+                errorEl.classList.add('d-none');
+                errorEl.textContent = '';
             }
         }
     </script>
