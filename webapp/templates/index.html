@@ -608,11 +608,16 @@
                                             <label for="reportMonth" class="form-label">报告月份</label>
                                             <input type="month" class="form-control" id="reportMonth">
                                         </div>
-                                        <div class="d-flex flex-column flex-md-row align-items-md-center gap-2">
-                                            <button class="btn btn-dark flex-grow-1" id="generateReportBtn">
-                                                <i class="bi bi-play-circle"></i> 生成图表与研报
-                                            </button>
-                                            <div id="reportStatus" class="report-meta flex-grow-1 text-md-end">请选择月份后点击生成。</div>
+                                        <div class="d-flex flex-column gap-2">
+                                            <div class="d-flex flex-column flex-md-row gap-2">
+                                                <button class="btn btn-dark flex-grow-1" id="generateReportBtn">
+                                                    <i class="bi bi-play-circle"></i> 生成图表与研报
+                                                </button>
+                                                <button class="btn btn-outline-primary flex-grow-1" id="exportPdfBtn" disabled>
+                                                    <i class="bi bi-file-earmark-pdf"></i> 导出PDF
+                                                </button>
+                                            </div>
+                                            <div id="reportStatus" class="report-meta text-md-end">请选择月份后点击生成。</div>
                                         </div>
                                         <div class="mt-3 small text-muted">
                                             输出内容聚焦美联储关注的就业增速、失业率结构与劳动力参与率。
@@ -693,6 +698,7 @@
         let currentChart = null;
         let chartType = 'line'; // 默认图表类型
         let activeIndicatorId = null; // 当前选中的指标ID
+        let lastReportData = null; // 最新的研报数据用于导出
 
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
@@ -1150,6 +1156,11 @@
             if (generateBtn) {
                 generateBtn.addEventListener('click', handleReportGeneration);
             }
+            const exportPdfBtn = document.getElementById('exportPdfBtn');
+            if (exportPdfBtn) {
+                exportPdfBtn.addEventListener('click', handlePdfExport);
+            }
+            setExportEnabled(false);
         }
 
         function handleReportGeneration() {
@@ -1158,6 +1169,8 @@
                 showMessage('请先选择报告月份', 'warning');
                 return;
             }
+            lastReportData = null;
+            setExportEnabled(false);
             setReportLoading(true, '正在生成图表与研报...');
             fetch('/api/labor-market/report', {
                 method: 'POST',
@@ -1182,9 +1195,61 @@
             });
         }
 
+        function setExportEnabled(isEnabled) {
+            const btnPdf = document.getElementById('exportPdfBtn');
+            if (btnPdf) btnPdf.disabled = !isEnabled;
+        }
+
+        function handlePdfExport() {
+            if (!lastReportData) {
+                showMessage('请先生成研报，再尝试导出', 'info');
+                return;
+            }
+            const btn = document.getElementById('exportPdfBtn');
+            const original = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="loading"></span> 生成PDF...';
+            }
+            fetch('/api/labor-market/report.pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ report_data: lastReportData })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => { throw new Error(data.error || '导出失败'); });
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const month = lastReportData.report_month || 'report';
+                a.href = url;
+                a.download = `非农就业研判_${month}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                showMessage('PDF 导出完成', 'success');
+            })
+            .catch(error => {
+                console.error('导出PDF失败:', error);
+                showMessage('导出PDF失败: ' + error.message, 'danger');
+            })
+            .finally(() => {
+                if (btn) {
+                    btn.innerHTML = original || '<i class="bi bi-file-earmark-pdf"></i> 导出PDF';
+                    setExportEnabled(!!lastReportData);
+                }
+            });
+        }
+
         function setReportLoading(isLoading, statusText) {
             const button = document.getElementById('generateReportBtn');
             const status = document.getElementById('reportStatus');
+            const exportPdfBtn = document.getElementById('exportPdfBtn');
             if (button) {
                 if (isLoading) {
                     button.disabled = true;
@@ -1194,6 +1259,7 @@
                     button.innerHTML = '<i class="bi bi-play-circle"></i> 生成图表与研报';
                 }
             }
+            if (exportPdfBtn) exportPdfBtn.disabled = !!isLoading;
             if (status && statusText) {
                 status.textContent = statusText;
             } else if (status && !isLoading) {
@@ -1205,6 +1271,8 @@
             const windowInfo = data.chart_window;
             const windowText = windowInfo ? `图表区间：${windowInfo.start_date} - ${windowInfo.end_date}` : '生成完成';
             setReportLoading(false, windowText);
+            lastReportData = data;
+            setExportEnabled(true);
             updateReportHero(data.headline_summary, windowText);
             renderReportContent(
                 data.report_text,
@@ -1355,49 +1423,56 @@
             const contentWrapper = document.createElement('div');
             contentWrapper.innerHTML = renderMarkdown(cleanedText);
 
-            // Pull existing figures so we can place them next to relevant sections.
+            // Pull figures and re-place so text (heading + paragraph) comes before image
             const fig1 = document.getElementById('reportChart1')?.closest('figure') || null;
             const fig2 = document.getElementById('reportChart2')?.closest('figure') || null;
             const fig3 = document.getElementById('reportChart3')?.closest('figure') || null;
             const fig4 = document.getElementById('reportChart4')?.closest('figure') || null;
-            const hasFig1 = !!(fig1 && fig1.parentNode);
-            const hasFig2 = !!(fig2 && fig2.parentNode);
-            const hasFig3 = !!(fig3 && fig3.parentNode);
-            const hasFig4 = !!(fig4 && fig4.parentNode);
-            if (hasFig1) fig1.parentNode.removeChild(fig1);
-            if (hasFig2) fig2.parentNode.removeChild(fig2);
-            if (hasFig3) fig3.parentNode.removeChild(fig3);
-            if (hasFig4) fig4.parentNode.removeChild(fig4);
+            const figs = [fig1, fig2, fig3, fig4];
+            figs.forEach(f => { if (f && f.parentNode) f.parentNode.removeChild(f); });
 
-            let placed1 = false;
-            let placed2 = false;
-            let placed3 = false;
-            let placed4 = false;
+            const nodes = Array.from(contentWrapper.childNodes);
+            const fragment = document.createDocumentFragment();
+            nodes.forEach(node => fragment.appendChild(node));
+            container.appendChild(fragment);
 
-            Array.from(contentWrapper.childNodes).forEach(node => {
-                container.appendChild(node);
-                if (!placed1 && fig1 && node.nodeType === 1 && /图1/.test(node.textContent || '')) {
-                    container.appendChild(fig1);
-                    placed1 = true;
+            function placeFigureAfterText(fig, label) {
+                if (!fig) return;
+                const children = Array.from(container.childNodes);
+                for (let i = 0; i < children.length; i++) {
+                    const node = children[i];
+                    const text = (node.textContent || '').trim();
+                    const isHeading = node.nodeType === 1 && /^H[1-3]$/i.test(node.tagName);
+                    if (isHeading && text.includes(label)) {
+                        for (let j = i + 1; j < children.length; j++) {
+                            const nextNode = children[j];
+                            if (nextNode.nodeType === 1 && /^(P|UL|OL)$/i.test(nextNode.tagName)) {
+                                nextNode.parentNode.insertBefore(fig, nextNode.nextSibling);
+                                return;
+                            }
+                            if (nextNode.nodeType === 1 && /^H[1-3]$/i.test(nextNode.tagName)) {
+                                node.parentNode.insertBefore(fig, node.nextSibling);
+                                return;
+                            }
+                        }
+                        container.appendChild(fig);
+                        return;
+                    }
                 }
-                if (!placed2 && fig2 && node.nodeType === 1 && /图2/.test(node.textContent || '')) {
-                    container.appendChild(fig2);
-                    placed2 = true;
+                for (let i = 0; i < children.length; i++) {
+                    const node = children[i];
+                    if (node.nodeType === 1 && /^(P|UL|OL)$/i.test(node.tagName)) {
+                        node.parentNode.insertBefore(fig, node.nextSibling);
+                        return;
+                    }
                 }
-                if (!placed3 && fig3 && node.nodeType === 1 && /图3/.test(node.textContent || '')) {
-                    container.appendChild(fig3);
-                    placed3 = true;
-                }
-                if (!placed4 && fig4 && node.nodeType === 1 && /图4/.test(node.textContent || '')) {
-                    container.appendChild(fig4);
-                    placed4 = true;
-                }
-            });
+                container.appendChild(fig);
+            }
 
-            if (fig1 && !placed1) container.appendChild(fig1);
-            if (fig2 && !placed2) container.appendChild(fig2);
-            if (fig3 && !placed3) container.appendChild(fig3);
-            if (fig4 && !placed4) container.appendChild(fig4);
+            placeFigureAfterText(fig1, '图1');
+            placeFigureAfterText(fig2, '图2');
+            placeFigureAfterText(fig3, '图3');
+            placeFigureAfterText(fig4, '图4');
 
             renderReportCharts(rawData);
         }

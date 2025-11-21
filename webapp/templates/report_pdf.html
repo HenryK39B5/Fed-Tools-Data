@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>非农就业研判 PDF 导出</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f5f7fa; margin: 0; padding: 16px; color: #1f2937; }
+        .shell { max-width: 900px; margin: 0 auto; background: #fff; border-radius: 10px; box-shadow: 0 12px 35px rgba(0,0,0,0.08); padding: 18px 22px 24px; }
+        .header { background: linear-gradient(135deg, #1f2c3d, #243447); color: #fff; border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+        .header h1 { margin: 0 0 6px 0; font-size: 20px; }
+        .meta { opacity: 0.85; font-size: 13px; }
+        h2 { margin: 18px 0 10px; font-size: 17px; color: #0f172a; }
+        h3 { margin: 14px 0 8px; font-size: 15px; color: #1e293b; }
+        p { margin: 8px 0; line-height: 1.6; }
+        ul, ol { margin: 8px 0 8px 18px; }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-weight: 600; font-size: 12px; }
+        .badge-primary { background: #0d6efd; color: #fff; }
+        .badge-muted { background: #e5e7eb; color: #111827; }
+        .chip { display: inline-block; padding: 6px 10px; border-radius: 8px; background: #e9f3ff; color: #1b4f72; margin-top: 4px; }
+        .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; background: #fafbfc; margin-bottom: 14px; }
+        figure { margin: 12px 0 18px; padding: 10px; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; }
+        figcaption { font-size: 13px; color: #475569; margin-bottom: 8px; }
+        img.chart { width: 100%; border-radius: 6px; background: #f8fafc; }
+        .pill-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+        .pill { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; background: #fff; }
+        .pill strong { display: block; color: #0f172a; }
+        .pill .meta { color: #6b7280; font-size: 12px; }
+        .inline-figure { margin: 10px 0 14px; }
+        .inline-figure img { width: 100%; border-radius: 6px; }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <div class="header">
+            <h1>非农就业研判</h1>
+            <div class="meta">导出时间：{{ exported_at }} ｜ 报告月份：{{ export_month }}</div>
+        </div>
+
+        <div class="card">
+            <div class="badge badge-primary">Headline</div>
+            <div class="chip">{{ report.headline_summary or '研报摘要' }}</div>
+            {% if report.chart_window %}
+            <div class="meta" style="margin-top:6px;">图表区间：{{ report.chart_window.start_date }} - {{ report.chart_window.end_date }}</div>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <div class="badge badge-muted">正文 + 图表</div>
+            {% if report_html %}
+                <div style="margin-top:8px;">{{ report_html | safe }}</div>
+            {% else %}
+                <p class="meta">未提供研报正文。</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <div class="badge badge-muted">关键指标摘要</div>
+            <div class="pill-grid" style="margin-top:10px;">
+                {% if report.indicators %}
+                    {% for item in report.indicators %}
+                        <div class="pill">
+                            <strong>{{ item.name }}</strong>
+                            <div>{{ item.latest_value }}{{ item.units }}</div>
+                            {% if item.mom_change %}<div class="meta">环比 {{ item.mom_change }}</div>{% endif %}
+                            {% if item.yoy_change %}<div class="meta">同比 {{ item.yoy_change }}</div>{% endif %}
+                            {% if item.context %}<div class="meta">{{ item.context }}</div>{% endif %}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+                {% if report.unemployment_types_series %}
+                    {% for item in report.unemployment_types_series %}
+                        <div class="pill">
+                            <strong>{{ item.label }} 失业率</strong>
+                            <div>{{ "%.2f"|format(item.current or 0) }}%</div>
+                            {% if item.mom_delta is not none %}<div class="meta">环比 {{ "%+.2f"|format(item.mom_delta) }}</div>{% endif %}
+                            {% if item.code %}<div class="meta">代码 {{ item.code }}</div>{% endif %}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+                {% if (not report.indicators) and (not report.unemployment_types_series) %}
+                    <div class="pill"><div class="meta">暂无摘要数据</div></div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

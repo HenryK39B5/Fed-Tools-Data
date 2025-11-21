@@ -4,10 +4,14 @@ import os
 import sys
 from calendar import monthrange
 from datetime import datetime, timedelta
+import json
+import html
+import re
+from bs4 import BeautifulSoup
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, make_response, Response
 from dotenv import load_dotenv
 
 # 将项目根目录添加到Python路径中
@@ -100,6 +104,216 @@ def format_delta(current, reference, decimals: int = 1):
         return None
     delta = current - reference
     return f"{delta:+.{decimals}f}"
+
+
+def simple_markdown_to_html(md_text: str) -> str:
+    """Lightweight Markdown renderer used for PDF export (headings, lists, bold/italic)."""
+    if not md_text:
+        return ""
+    # 去掉可能出现的 ```markdown ... ``` 或 ``` 包裹
+    stripped = md_text.strip()
+    if stripped.startswith("```"):
+        parts = stripped.splitlines()
+        # 跳过第一行 fence，去掉最后一行 fence
+        if parts:
+            parts = parts[1:] if parts[0].startswith("```") else parts
+        if parts and parts[-1].startswith("```"):
+            parts = parts[:-1]
+        stripped = "\n".join(parts)
+
+    lines = stripped.splitlines()
+    html_parts = []
+    list_buffer = []
+    list_type = None  # "ul" or "ol"
+
+    def flush_list():
+        nonlocal list_buffer, list_type
+        if not list_buffer:
+            return
+        tag = "ol" if list_type == "ol" else "ul"
+        items = "".join(f"<li>{item}</li>" for item in list_buffer)
+        html_parts.append(f"<{tag}>{items}</{tag}>")
+        list_buffer = []
+        list_type = None
+
+    def fmt_inline(text: str) -> str:
+        escaped = html.escape(text)
+        escaped = escaped.replace("**", "\0").replace("*", "\1")
+        escaped = escaped.replace("\0", "<strong>", 1).replace("\0", "</strong>", 1)
+        escaped = escaped.replace("\1", "<em>", 1).replace("\1", "</em>", 1)
+        return escaped
+
+    for raw in lines:
+        line = raw.strip()
+        if not line:
+            flush_list()
+            continue
+        if line.startswith("#"):
+            flush_list()
+            hashes, _, content = line.partition(" ")
+            level = min(len(hashes), 3)
+            html_parts.append(f"<h{level}>{fmt_inline(content)}</h{level}>")
+            continue
+        if line.startswith(("-", "*", "+")) and len(line) > 1 and line[1] == " ":
+            if list_type not in (None, "ul"):
+                flush_list()
+            list_type = "ul"
+            list_buffer.append(fmt_inline(line[2:].strip()))
+            continue
+        if line[:1].isdigit() and ". " in line:
+            if list_type not in (None, "ol"):
+                flush_list()
+            list_type = "ol"
+            _, _, rest = line.partition(" ")
+            list_buffer.append(fmt_inline(rest.strip()))
+            continue
+        flush_list()
+        html_parts.append(f"<p>{fmt_inline(line)}</p>")
+
+    flush_list()
+    return "\n".join(html_parts)
+
+
+def inject_figures_into_report_html(report_html: str, charts: dict) -> str:
+    """Insert charts after corresponding heading/paragraph (text before image)."""
+    soup = BeautifulSoup(report_html or "", "html.parser")
+    body = soup.body or soup
+
+    def make_fig(idx: int, b64: str, title: str):
+        fig = soup.new_tag("figure", **{"class": "inline-figure"})
+        cap = soup.new_tag("figcaption")
+        cap.string = title
+        img = soup.new_tag("img", src=f"data:image/png;base64,{b64}", **{"class": "chart", "alt": f'图{idx}'})
+        fig.append(cap)
+        fig.append(img)
+        return fig
+
+    titles = {
+        1: "图1：新增非农就业（万人）及失业率(%，右)",
+        2: "图2：分行业新增非农就业贡献率(%)",
+        3: "图3：各类型失业率(%)",
+        4: "图4：就业率和劳动参与率(%)",
+    }
+
+    def insert_after_anchor(label: str, fig_tag):
+        # find heading containing label
+        heading = None
+        for h in body.find_all(["h1", "h2", "h3"]):
+            if h.get_text(strip=True).find(label) != -1:
+                heading = h
+                break
+        if heading:
+            # place after the next block element (p/list/heading following)
+            node = heading
+            while node and node.next_sibling:
+                node = node.next_sibling
+                if getattr(node, "name", None) in ["h1", "h2", "h3", "p", "ul", "ol"]:
+                    node.insert_after(fig_tag)
+                    return True
+        # fallback: append to body
+        body.append(fig_tag)
+        return False
+
+    for idx in range(1, 5):
+        key = f"chart{idx}"
+        b64 = charts.get(key)
+        if not b64:
+            continue
+        fig_tag = make_fig(idx, b64, titles.get(idx, f"图{idx}"))
+        insert_after_anchor(f"图{idx}", fig_tag)
+
+    return str(soup)
+
+
+def build_pdf_charts(report_payload: dict):
+    """Render chart images (base64) for PDF using matplotlib to avoid front-end dependencies."""
+    figures = {}
+
+    # 图1：PAYEMS + UNRATE
+    try:
+        payems_series = report_payload.get("payems_series") or []
+        unemp_series = report_payload.get("unemployment_series") or []
+        labels = [p.get("date") for p in payems_series]
+        payems_values = [p.get("monthly_change_10k") or p.get("value") for p in payems_series]
+        un_map = {u.get("date"): u.get("value") for u in unemp_series}
+        un_values = [un_map.get(d) for d in labels]
+
+        fig, ax1 = plt.subplots(figsize=(7.5, 4))
+        ax1.bar(labels, payems_values, color="#2f78c4", alpha=0.75, label="新增非农就业（万人）")
+        ax1.set_ylabel("万人")
+        ax1.tick_params(axis="x", rotation=45)
+
+        ax2 = ax1.twinx()
+        ax2.plot(labels, un_values, color="#ff7f0e", marker="o", linewidth=1.8, label="失业率(%)")
+        ax2.set_ylabel("%")
+
+        ax1.legend(loc="upper left")
+        ax2.legend(loc="upper right")
+        fig.tight_layout()
+        figures["chart1"] = figure_to_base64(fig)
+    except Exception:
+        figures["chart1"] = None
+
+    # 图2：行业贡献率堆叠条形图
+    try:
+        contrib = report_payload.get("industry_contribution") or {}
+        labels = list(reversed(contrib.get("labels") or []))
+        datasets = contrib.get("datasets") or []
+        fig, ax = plt.subplots(figsize=(7.5, 4))
+        current = [0] * len(labels)
+        palette = [
+            "#1f77b4", "#52b788", "#f4a261", "#e63946", "#2a9d8f", "#6c63ff", "#ff7f50",
+            "#90be6d", "#d35d6e", "#5c7cfa", "#00b4d8", "#b07dac", "#7d8597", "#2c3e50"
+        ]
+        for idx, ds in enumerate(datasets):
+            data = list(reversed(ds.get("data") or []))
+            ax.barh(labels, data, left=current, color=palette[idx % len(palette)], label=ds.get("label"))
+            current = [c + (v or 0) for c, v in zip(current, data)]
+        ax.set_xlabel("贡献率(%)")
+        ax.legend(fontsize=8, loc="lower right")
+        fig.tight_layout()
+        figures["chart2"] = figure_to_base64(fig)
+    except Exception:
+        figures["chart2"] = None
+
+    # 图3：失业率类型对比
+    try:
+        series = report_payload.get("unemployment_types_series") or []
+        labels = [s.get("label") for s in series]
+        prev_vals = [s.get("previous") for s in series]
+        curr_vals = [s.get("current") for s in series]
+        x = range(len(labels))
+        width = 0.35
+        fig, ax = plt.subplots(figsize=(7.5, 4))
+        ax.bar([i - width/2 for i in x], prev_vals, width, label="上月", color="#8da9c4")
+        ax.bar([i + width/2 for i in x], curr_vals, width, label="本月", color="#2f78c4")
+        ax.set_xticks(list(x))
+        ax.set_xticklabels(labels, rotation=30, ha="right")
+        ax.set_ylabel("失业率(%)")
+        ax.legend()
+        fig.tight_layout()
+        figures["chart3"] = figure_to_base64(fig)
+    except Exception:
+        figures["chart3"] = None
+
+    # 图4：就业率/劳动参与率
+    try:
+        series = report_payload.get("employment_participation_series") or []
+        labels = [s.get("date") for s in series]
+        emp_vals = [s.get("employment_rate") for s in series]
+        part_vals = [s.get("participation_rate") for s in series]
+        fig, ax = plt.subplots(figsize=(7.5, 4))
+        ax.plot(labels, emp_vals, color="#2f78c4", marker="o", linewidth=1.8, label="就业率(%)")
+        ax.plot(labels, part_vals, color="#ef6c00", marker="o", linewidth=1.8, label="劳动参与率(%)")
+        ax.set_ylabel("%")
+        ax.tick_params(axis="x", rotation=45)
+        ax.legend()
+        fig.tight_layout()
+        figures["chart4"] = figure_to_base64(fig)
+    except Exception:
+        figures["chart4"] = None
+
+    return figures
 
 def serialize_series(df: pd.DataFrame, value_key: str):
     """Serialize pandas dataframe to JSON-friendly structure."""
@@ -651,6 +865,48 @@ def refresh_data():
         return jsonify({'message': '数据刷新任务已启动'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/labor-market/report.pdf', methods=['POST'])
+def export_labor_market_report_pdf():
+    """使用Playwright生成PDF（基于已生成的研报数据）"""
+    payload = request.get_json() or {}
+    report_data = payload.get("report_data") or {}
+    if not report_data:
+        return jsonify({'error': '缺少report_data参数，请先生成研报后再导出'}), 400
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return jsonify({'error': '缺少playwright依赖，请先安装：pip install playwright && playwright install chromium'}), 500
+
+    report_month = report_data.get("report_month") or datetime.utcnow().strftime("%Y-%m")
+    exported_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+
+    charts = build_pdf_charts(report_data)
+    report_html = simple_markdown_to_html(report_data.get("report_text") or "")
+    pdf_html = render_template(
+        'report_pdf.html',
+        report=report_data,
+        report_html=inject_figures_into_report_html(report_html, charts),
+        charts=charts,
+        export_month=report_month,
+        exported_at=exported_at
+    )
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(args=["--no-sandbox"])
+            page = browser.new_page(viewport={"width": 1280, "height": 720})
+            page.set_content(pdf_html, wait_until="load")
+            pdf_bytes = page.pdf(format="A4", print_background=True, margin={"top": "10mm", "bottom": "15mm", "left": "10mm", "right": "10mm"})
+            browser.close()
+    except Exception as exc:
+        return jsonify({'error': f'生成PDF失败: {exc}'}), 500
+
+    response = Response(pdf_bytes, mimetype='application/pdf')
+    response.headers['Content-Disposition'] = f'attachment; filename=nonfarm_report_{report_month}.pdf'
+    return response
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
