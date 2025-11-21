@@ -46,7 +46,7 @@ class IndustryContributionPayload:
 
 
 class IndustryContributionChartBuilder:
-    """Prepare industry contribution ratios for the current year."""
+    """Prepare industry contribution ratios for the most recent 12 months (inclusive)."""
 
     def __init__(self, database_url: str = DEFAULT_DB_URL):
         self.database_url = database_url
@@ -58,21 +58,29 @@ class IndustryContributionChartBuilder:
     def prepare_payload(
         self, year: Optional[int] = None, as_of: Optional[datetime] = None
     ) -> IndustryContributionPayload:
-        target_year = year or (as_of.year if as_of else datetime.now().year)
+        anchor_date = as_of or (datetime(year, 12, 31) if year else datetime.now())
+        end_period = pd.Period(anchor_date, freq="M")
+        start_period = end_period - 11
 
         total_df = self._load_indicator_series("PAYEMS")
         total_df["period"] = total_df["date"].dt.to_period("M")
         total_df["monthly_change"] = total_df["value"].diff()
-        total_year = total_df[total_df["date"].dt.year == target_year]
+        total_window = total_df[
+            (total_df["period"] >= start_period) & (total_df["period"] <= end_period)
+        ]
 
-        if total_year.empty:
-            raise ValueError(f"{target_year} 年缺少 PAYEMS 数据，无法计算分行业贡献。")
+        if total_window.empty:
+            raise ValueError(
+                f"{start_period.strftime('%Y-%m')} 至 {end_period.strftime('%Y-%m')} 缺少 PAYEMS 数据，无法计算分行业贡献。"
+            )
 
         # Months where total change is non-zero (avoid division by zero)
-        total_change = total_year.set_index("period")["monthly_change"]
+        total_change = total_window.set_index("period")["monthly_change"]
         valid_periods = [p for p in total_change.index if pd.notna(total_change[p]) and total_change[p] != 0]
         if not valid_periods:
-            raise ValueError(f"{target_year} 年缺少可用的新增非农就业数据（增量为0或缺失）。")
+            raise ValueError(
+                f"{start_period.strftime('%Y-%m')} 至 {end_period.strftime('%Y-%m')} 缺少可用的新增非农就业数据（增量为0或缺失）。"
+            )
 
         # Preserve chronological order
         valid_periods = sorted(valid_periods)
@@ -86,9 +94,9 @@ class IndustryContributionChartBuilder:
             df = self._load_indicator_series(code)
             df["period"] = df["date"].dt.to_period("M")
             df["monthly_change"] = df["value"].diff()
-            df_year = df[df["date"].dt.year == target_year]
+            df_window = df[(df["period"] >= start_period) & (df["period"] <= end_period)]
 
-            series = df_year.set_index("period")["monthly_change"].reindex(valid_periods)
+            series = df_window.set_index("period")["monthly_change"].reindex(valid_periods)
             contribution_table[code] = (series / total_change.reindex(valid_periods)) * 100
 
         datasets: List[Dict[str, object]] = []

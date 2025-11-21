@@ -4,28 +4,32 @@
     <meta charset="UTF-8">
     <title>非农就业研判 PDF 导出</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f5f7fa; margin: 0; padding: 16px; color: #1f2937; }
+        :root {
+            --brand-blue: #2b63d9;
+            --text-primary: #1f2937;
+        }
+        body { font-family: 'Times New Roman', 'KaiTi', 'STKaiti', serif; background: #f5f7fa; margin: 0; padding: 16px; color: var(--text-primary); font-size: 13px; }
         .shell { max-width: 900px; margin: 0 auto; background: #fff; border-radius: 10px; box-shadow: 0 12px 35px rgba(0,0,0,0.08); padding: 18px 22px 24px; }
-        .header { background: linear-gradient(135deg, #1f2c3d, #243447); color: #fff; border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
-        .header h1 { margin: 0 0 6px 0; font-size: 20px; }
-        .meta { opacity: 0.85; font-size: 13px; }
-        h2 { margin: 18px 0 10px; font-size: 17px; color: #0f172a; }
-        h3 { margin: 14px 0 8px; font-size: 15px; color: #1e293b; }
-        p { margin: 8px 0; line-height: 1.6; }
+        .header { background: linear-gradient(135deg, #1f2c3d, #243447); color: #fff; border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+        .header h1 { margin: 0 0 6px 0; font-size: 24px; letter-spacing: 0.4px; }
+        .meta { opacity: 0.85; font-size: 12px; }
+        h2 { margin: 18px 0 10px; font-size: 18px; color: #0f172a; }
+        h3 { margin: 14px 0 8px; font-size: 16px; color: var(--brand-blue); }
+        p { margin: 8px 0; line-height: 1.6; text-indent: 2em; }
         ul, ol { margin: 8px 0 8px 18px; }
         .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-weight: 600; font-size: 12px; }
         .badge-primary { background: #0d6efd; color: #fff; }
         .badge-muted { background: #e5e7eb; color: #111827; }
         .chip { display: inline-block; padding: 6px 10px; border-radius: 8px; background: #e9f3ff; color: #1b4f72; margin-top: 4px; }
         .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; background: #fafbfc; margin-bottom: 14px; }
-        figure { margin: 12px 0 18px; padding: 10px; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; }
+        figure { margin: 12px auto 18px; padding: 10px; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; width: 70%; }
         figcaption { font-size: 13px; color: #475569; margin-bottom: 8px; }
         img.chart { width: 100%; border-radius: 6px; background: #f8fafc; }
         .pill-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
         .pill { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; background: #fff; }
         .pill strong { display: block; color: #0f172a; }
         .pill .meta { color: #6b7280; font-size: 12px; }
-        .inline-figure { margin: 10px 0 14px; }
+        .inline-figure { margin: 10px auto 14px; width: 70%; }
         .inline-figure img { width: 100%; border-radius: 6px; }
     </style>
 </head>

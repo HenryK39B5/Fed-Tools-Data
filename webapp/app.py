@@ -3,12 +3,14 @@ import io
 import os
 import sys
 from calendar import monthrange
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import html
 import re
 from bs4 import BeautifulSoup
 
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 from flask import Flask, render_template, jsonify, request, make_response, Response
@@ -227,6 +229,10 @@ def inject_figures_into_report_html(report_html: str, charts: dict) -> str:
 
 def build_pdf_charts(report_payload: dict):
     """Render chart images (base64) for PDF using matplotlib to avoid front-end dependencies."""
+    plt.rcParams.update({
+        "font.family": ["Times New Roman", "KaiTi", "STKaiti", "DejaVu Serif"],
+        "axes.unicode_minus": False,
+    })
     figures = {}
 
     # 图1：PAYEMS + UNRATE
@@ -270,6 +276,7 @@ def build_pdf_charts(report_payload: dict):
             ax.barh(labels, data, left=current, color=palette[idx % len(palette)], label=ds.get("label"))
             current = [c + (v or 0) for c, v in zip(current, data)]
         ax.set_xlabel("贡献率(%)")
+        ax.invert_yaxis()  # 最近月份置顶，阅读顺序更自然
         ax.legend(fontsize=8, loc="lower right")
         fig.tight_layout()
         figures["chart2"] = figure_to_base64(fig)
@@ -881,7 +888,8 @@ def export_labor_market_report_pdf():
         return jsonify({'error': '缺少playwright依赖，请先安装：pip install playwright && playwright install chromium'}), 500
 
     report_month = report_data.get("report_month") or datetime.utcnow().strftime("%Y-%m")
-    exported_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+    tz_cn = timezone(timedelta(hours=8))
+    exported_at = datetime.now(tz_cn).strftime("%Y-%m-%d %H:%M")
 
     charts = build_pdf_charts(report_data)
     report_html = simple_markdown_to_html(report_data.get("report_text") or "")
@@ -895,13 +903,49 @@ def export_labor_market_report_pdf():
     )
 
     try:
+        header_template = """
+        <style>
+          .pdf-head { font-family: 'Times New Roman', 'KaiTi', serif; font-size: 12px; width: 100%; padding: 10px 22px 8px; color: #4a5568; display:flex; justify-content: space-between; align-items: center; box-sizing:border-box; }
+          .pdf-head .brand { display:flex; align-items:center; gap:14px; font-weight:700; letter-spacing:0.35px; }
+          .pdf-head .icon { width:30px; height:30px; border-radius:10px; background:linear-gradient(135deg,#1b2f60,#2f6bff); position:relative; box-shadow:0 8px 20px rgba(31,63,130,0.24), inset 0 1px 0 rgba(255,255,255,0.15); display:grid; place-items:center; }
+          .pdf-head .icon::after { content:\"\"; position:absolute; inset:4px; border-radius:8px; border:1px solid rgba(255,255,255,0.35); box-shadow:inset 0 0 0 1px rgba(0,0,0,0.06); }
+          .pdf-head .icon span { position:relative; z-index:1; color:#f9fbff; font-size:13px; font-weight:800; font-family:'Times New Roman', serif; letter-spacing:0.4px; }
+          .pdf-head .tagline { font-weight:650; color:#374151; font-size: 11.5px; }
+        </style>
+        <div class="pdf-head">
+          <div class="brand"><span class="icon"><span>F</span></span><span>Fed Tools · 非农研判</span></div>
+          <div class="tagline">智能洞察 · 自动撰写</div>
+        </div>
+        """
+        footer_template = """
+        <style>
+          .pdf-foot { font-family: 'Times New Roman', 'KaiTi', serif; font-size:11.5px; width:100%; padding:8px 22px 8px; color:#4b5563; text-align:right; box-sizing:border-box; }
+        </style>
+        <div class="pdf-foot">第 <span class="pageNumber"></span> / <span class="totalPages"></span> 页</div>
+        """
         with sync_playwright() as p:
             browser = p.chromium.launch(args=["--no-sandbox"])
             page = browser.new_page(viewport={"width": 1280, "height": 720})
             page.set_content(pdf_html, wait_until="load")
-            pdf_bytes = page.pdf(format="A4", print_background=True, margin={"top": "10mm", "bottom": "15mm", "left": "10mm", "right": "10mm"})
+            try:
+                pdf_bytes = page.pdf(
+                    format="A4",
+                    print_background=True,
+                    display_header_footer=True,
+                    header_template=header_template,
+                    footer_template=footer_template,
+                    margin={"top": "20mm", "bottom": "22mm", "left": "16mm", "right": "16mm"}
+                )
+            except Exception:
+                app.logger.exception("带页眉/页码导出失败，使用降级方案重试")
+                pdf_bytes = page.pdf(
+                    format="A4",
+                    print_background=True,
+                    margin={"top": "20mm", "bottom": "22mm", "left": "16mm", "right": "16mm"}
+                )
             browser.close()
     except Exception as exc:
+        app.logger.exception("生成PDF失败")
         return jsonify({'error': f'生成PDF失败: {exc}'}), 500
 
     response = Response(pdf_bytes, mimetype='application/pdf')
