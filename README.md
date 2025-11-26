@@ -1,88 +1,26 @@
-# FOMC 宏观数据情报工作台
+# 联邦货币 LLM 委员会（FOMC）项目
 
-本仓库将演进为“联邦货币 LLM 委员会（Federal mOnetary llM Committee）”的基础设施：既是数据/研报工具，也是流程体验和教学内容的底座。详细的项目指南针见 `docs/PROJECT_COMPASS.md`。
+以“工具 + 教学 + 沉浸式流程”帮助用户理解美联储货币政策决策。愿景、交互骨架与路线图详见 `docs/PROJECT_COMPASS.md`。
 
-面向非技术用户的本地化宏观数据小工具：自动抓取清洗经济数据，提供可视化浏览，一键生成非农/CPI 研报，并可导出 PDF。
+## 仓库结构
+- `docs/`：项目指南针与公共文档。
+- `packages/data/`：FED-TOOLS-DATA 模块（数据抓取/清洗、可视化、研报、PDF）。现阶段的可运行部分。
+- `packages/`（预留）：`models`、`agents`、`common` 等共享包。
+- `apps/`（预留）：`web`、`api` 等应用层。
+- `fomc_data.db`：默认 SQLite 数据库，供数据模块及未来应用共享。
 
-## 项目方向与入口
-- 三种模式共用同一流程骨架（数据 → 研报 → 规则模型 → 讨论 → 决议/纪要 → 复盘）：  
-  - **历史会议模拟**：按会议日历重放当期可见数据，生成研报、模型结果和摘要。  
-  - **美联储 101**：交互式说明书/案例，解释指标、模型和提示词，支持一键跳转到对应会议步骤。  
-  - **工具箱**：数据浏览、研报生成、规则模型计算、FedWatch 可视化、修订对比，可独立使用或在流程内调出。  
-- 未来会议模拟暂缓，仅保留“最新会议”占位展示最新数据与 FedWatch 市场预期。  
-- 更多设计、路线图与架构建议请查看 `docs/PROJECT_COMPASS.md`。
+## 先行可用模块：packages/data
+- 主要功能：抓取/更新 FRED 数据、生成非农与 CPI 研报、Web 界面展示与 PDF 导出。
+- 快速使用（在仓库根目录执行）：  
+  ```bash
+  pip install -r packages/data/requirements.txt
+  python packages/data/init_database.py
+  python packages/data/process_all_indicators.py
+  cd packages/data/webapp && python app.py
+  ```
+- 详细说明见 `packages/data/README.md`。
 
-## 核心功能
-- 经济指标浏览：按分类挑选指标，查看趋势图和数据表，附带 FRED 链接。
-- 研报生成：输入月份即可生成专题研报  
-  - 非农：自动绘制新增就业、行业贡献、失业率等图表，生成解读。  
-  - CPI：自动绘制同比/环比图表，生成分项拉动表。
-- PDF 导出：非农与 CPI 研报均可一键导出（包含图表和表格）。
-- 数据更新：脚本化抓取与增量更新，数据存储在本地 SQLite。
-
-## 简明架构
-- 数据层：从 FRED 抓取并清洗，存入本地 SQLite；`process_all_indicators.py` 负责一键更新。
-- 服务层：Flask 提供 API 和页面渲染；`webapp/app.py` 同时渲染图表、生成 PDF。
-- 前端层：单页式界面（`webapp/templates/index.html`），显示图表、表格并触发研报/PDF 导出。
-- AI 生成（可选）：如配置 DeepSeek API，可自动写研报正文；未配置时仍可生成图表和表格。
-
-## 快速上手
-1) 安装依赖  
-```bash
-pip install -r requirements.txt
-```
-2) 配置 `.env`（文本文件即可）  
-```
-FRED_API_KEY=你的FRED密钥       # https://fred.stlouisfed.org
-DEEPSEEK_API_KEY=可选，用于自动写研报
-```
-3) 初始化并更新数据  
-```bash
-python init_database.py
-python process_all_indicators.py            # 默认从 2010 年开始抓取
-# 如需指定起点：python process_all_indicators.py --start-date 2015-01-01
-```
-4) 启动 Web 工作台  
-```bash
-cd webapp
-python app.py
-# 浏览器打开 http://localhost:5000
-```
-
-## 如何生成研报
-- 非农研报：在页面选择月份，点击“生成非农研报”→ 可查看并导出 PDF。
-- CPI 研报：在页面选择月份，点击“生成CPI图表与研判”→ 可查看并导出 PDF（含分项拉动表、可视化条形+数值）。
-- 若未设置 DEEPSEEK_API_KEY，仍可生成图表和表格，正文会使用简短占位描述。
-
-## 目录速览
-```
-data/          数据抓取与清洗；charts/ 内含各类图表的数据管道
-database/      SQLAlchemy 模型定义
-reports/       研报生成与提示词（DeepSeek）
-webapp/        Flask 后端与前端模板（index.html 为主要页面）
-requirements.txt  依赖列表
-```
-
-## 数据架构与更新操作说明
-- **数据存储**：本地 SQLite（`fomc_data.db`），模型定义见 `database/models.py`。`EconomicDataPoint` 对 `indicator_id + date` 有唯一约束，避免重复。
-- **元数据与分类**：Excel (`docs/US Economic Indicators with FRED Codes.xlsx`) 是指标清单。`data/indicator_sync_pipeline.py` 负责读取 Excel、创建/更新分类与指标；`data/category_manager.py` 保持既定层级与排序。
-- **数据抓取**：`data/data_updater.py` 只补缺口并可全量刷新，调用带限流的 `data/rate_limited_fred_api.py`。避免直接重刷长区间。
-- **统一入口**：`process_all_indicators.py` 现在只是薄封装，实际工作由 `IndicatorSyncPipeline` 完成（元数据同步 + 增量补数）。
-- **其他工具**：`init_database.py` 建表；`update_fred_urls.py` 为指标补充 FRED 链接。
-
-### 常用命令（含典型场景）
-- 全量同步（默认从 2010-01-01 开始，按 Excel 清单增量补缺）：  
-  `python process_all_indicators.py`
-- 只更新最新一个月（例：库里最新是 2025-08，想补 2025-09）：  
-  `python process_all_indicators.py --start-date 2025-08-01 --end-date 2025-09-30`  
-  增量抓取会跳过已存在的日期；`--end-date` 可省略，默认抓到当前日期。
-- Excel 新增了指标并希望补齐历史：  
-  1) 在 `docs/US Economic Indicators with FRED Codes.xlsx` 中新增行，保持列名/结构：`板块`、`经济指标`、`Indicator`、`FRED 代码`；分类行的 FRED 代码应为空或与指标名相同。  
-  2) 执行 `python process_all_indicators.py --start-date 2010-01-01`（或更早，如 2000-01-01）。新增指标会被创建，旧指标保持不变。开始日期取决于你希望覆盖的最早时间，增量逻辑会避免重复插入。
-- 补入更早年份的数据（例：要从 2000 年开始补全历史）：  
-  `python process_all_indicators.py --start-date 2000-01-01 --full-refresh`  
-  `--full-refresh` 会在拉取前清空各指标已存数据再重拉；若只想补缺口，可去掉该参数。
-
-## 注意事项
-- PDF 导出默认无书签/大纲；如需书签可在导出后自行处理。
-- 本地默认使用 SQLite，生产可替换为其他数据库（调整 SQLAlchemy 连接字符串）。
+## 近期计划
+- 按指南针建立三模式骨架：体验（历史会议模拟）/ 学习（美联储 101）/ 工具（工具箱）。
+- 接入 FedWatch 与规则模型，串联数据 → 研报 → 模型 → 讨论 → 决议/复盘。
+- 拆分共享包与应用层（`packages/models`、`packages/agents`、`apps/web`、`apps/api`）。

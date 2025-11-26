@@ -2,6 +2,7 @@ import base64
 import io
 import os
 import sys
+from pathlib import Path
 from calendar import monthrange
 from datetime import datetime, timedelta, timezone
 import json
@@ -17,15 +18,17 @@ import pandas as pd
 from flask import Flask, render_template, jsonify, request, make_response, Response
 from dotenv import load_dotenv
 
-# 将项目根目录添加到Python路径中
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(PROJECT_ROOT)
+# 路径设置：PACKAGE_ROOT 指向 packages/data，REPO_ROOT 指向仓库根
+# app.py 位于 packages/data/webapp/app.py，因此 parents[1] == packages/data，parents[3] == 仓库根
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
+sys.path.append(str(PACKAGE_ROOT))
 
-# 加载环境变量，供FRED/DeepSeek等服务使用
-load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+# 加载环境变量，供 FRED/DeepSeek 等服务使用（优先仓库根目录的 .env）
+load_dotenv(REPO_ROOT / ".env")
 
-# 使用项目根目录的数据库文件
-DATABASE_URL = "sqlite:///" + os.path.join(PROJECT_ROOT, "fomc_data.db")
+# 统一使用仓库根目录的数据库文件，便于各模块共享
+DATABASE_URL = f"sqlite:///{REPO_ROOT / 'fomc_data.db'}"
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
